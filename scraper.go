@@ -1,83 +1,90 @@
 package main
 
 import (
-    "encoding/csv"
-    "log"
-    "os"
-    "time"
-    "github.com/gocolly/colly"
+	"encoding/csv"
+	"log"
+	"os"
+	"github.com/yourusername/blue-jay/config" 
+	"github.com/gocolly/colly"
 )
 
-type gameStruct struct {
-    title           string
-    description     string
-    price           string
+type Game struct {
+	Title       string
+	Description string
+	Price       string
 }
 
-func scrapeGameList()  {
-    var scrapData []gameStruct
+func scrapeGameList(cfg *config.Config) []Game {
+	var games []Game
 
-    c := colly.NewCollector(
-        colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"),
-        )
+	collector := colly.NewCollector(
+		colly.UserAgent(cfg.UserAgent),
+	)
 
-    c.SetRequestTimeout(time.Second * 10)
+	collector.SetRequestTimeout(cfg.RequestTimeout)
 
-    c.OnHTML(".search-results-row", func(e *colly.HTMLElement) {
-        game := gameStruct{}
+	collector.OnHTML(".search-results-row", func(e *colly.HTMLElement) {
+		game := Game{
+			Title:       e.ChildText(".search-results-row-game-title"),
+			Description: e.ChildText(".search-results-row-game-infos"),
+			Price:       e.ChildText(".search-results-row-price"),
+		}
+		games = append(games, game)
+	})
 
-        game.title = e.ChildText(".search-results-row-game-title")
-        game.description = e.ChildText(".search-results-row-game-infos")
-        game.price = e.ChildText(".search-results-row-price")
+	collector.OnError(func(r *colly.Response, err error) {
+		log.Printf("Request URL: %s failed with response: %v\n", r.Request.URL, err)
+	})
 
-        scrapData = append(scrapData, game)
-    })
+	err := collector.Visit(cfg.GameListURL)
+	if err != nil {
+		log.Fatalf("Failed to visit URL %s: %v", cfg.GameListURL, err)
+	}
 
-    c.OnError(func(r *colly.Response, err error) {
-        log.Printf("Request URL: %s failed with response: %v\n", r.Request.URL, err)
-    })
+	collector.Wait()
 
-    c.Visit("https://www.allkeyshop.com/blog/catalogue/search-Elden+Ring/")
-    c.Wait()
-
-    writeToCSV(scrapData)
+	return games
 }
 
-func writeToCSV(gameList []gameStruct) []gameStruct {
-    file, err := os.Create("link1.csv")
-    if err != nil {
-        log.Fatalln("Failed to create output CSV file", err)
-    }
-    defer file.Close()
+func writeToCSV(games []Game, fileName string) error {
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    writer := csv.NewWriter(file)
+	writer := csv.NewWriter(file)
 
-    headers := []string{
-        "url",
-        "image",
-        "title",
-        "text",
-    }
-    writer.Write(headers)
+	headers := []string{"Title", "Description", "Price"}
+	if err := writer.Write(headers); err != nil {
+		return err
+	}
 
-    for _, data := range gameList{ 
-        record := []string{
-            data.title,
-            data.description,
-            data.price,
-        }
-        writer.Write(record)
-    }
+	for _, game := range games {
+		record := []string{game.Title, game.Description, game.Price}
+		if err := writer.Write(record); err != nil {
+			return err
+		}
+	}
 
-    writer.Flush()
+	writer.Flush()
 
-    if err := writer.Error(); err != nil {
-        log.Fatalln("Error writing CSV:", err)
-    }
-
-    return gameList
+	return writer.Error()
 }
 
 func main() {
-    scrapeGameList()
+	config.CheckEnvironmentVariables()
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	games := scrapeGameList(cfg)
+
+	err = writeToCSV(games, cfg.CSVFileName)
+	if err != nil {
+		log.Fatalf("Failed to write games to CSV: %v", err)
+	}
 }
+
