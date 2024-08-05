@@ -36,7 +36,7 @@ func scrapeGameList(cfg *config.Config) []Game {
 		log.Printf("Request URL: %s failed with response: %v\n", r.Request.URL, err)
 	})
 
-	err := collector.Visit(cfg.GameListURL)
+	err := collector.Visit("https://www.allkeyshop.com/blog/catalogue/search-Elden+Ring/")
 	if err != nil {
 		log.Fatalf("Failed to visit URL %s: %v", cfg.GameListURL, err)
 	}
@@ -73,8 +73,6 @@ func writeToCSV(games []Game, fileName string) error {
 }
 
 func main() {
-	config.CheckEnvironmentVariables()
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
