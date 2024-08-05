@@ -14,7 +14,7 @@ type gameStruct struct {
     price           string
 }
 
-func scrapeAndWriteCSV() []gameStruct {
+func scrapeGameList()  {
     var scrapData []gameStruct
 
     c := colly.NewCollector(
@@ -40,6 +40,10 @@ func scrapeAndWriteCSV() []gameStruct {
     c.Visit("https://www.allkeyshop.com/blog/catalogue/search-Elden+Ring/")
     c.Wait()
 
+    writeToCSV(scrapData)
+}
+
+func writeToCSV(gameList []gameStruct) []gameStruct {
     file, err := os.Create("link1.csv")
     if err != nil {
         log.Fatalln("Failed to create output CSV file", err)
@@ -56,7 +60,7 @@ func scrapeAndWriteCSV() []gameStruct {
     }
     writer.Write(headers)
 
-    for _, data := range scrapData {
+    for _, data := range gameList{ 
         record := []string{
             data.title,
             data.description,
@@ -71,9 +75,9 @@ func scrapeAndWriteCSV() []gameStruct {
         log.Fatalln("Error writing CSV:", err)
     }
 
-    return scrapData
+    return gameList
 }
 
 func main() {
-    scrapeAndWriteCSV()
+    scrapeGameList()
 }
