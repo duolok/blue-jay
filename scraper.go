@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"log"
 	"os"
-	"github.com/yourusername/blue-jay/config" 
+	"github.com/duolok/blue-jay/config" 
 	"github.com/gocolly/colly"
 )
 
