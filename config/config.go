@@ -2,7 +2,6 @@ package config
 
 import (
     "time"
-
     "github.com/spf13/viper"
 )
 
@@ -16,6 +15,7 @@ type Config struct {
 func LoadConfig() (*Config, error) {
     viper.SetDefault("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
     viper.SetDefault("REQUEST_TIMEOUT", 10*time.Second)
+    viper.SetDefault("GAME_LIST_URL", "https://www.allkeyshop.com/blog/catalogue/search-")
     viper.SetDefault("CSV_FILE_NAME", "games.csv")
 
     viper.AutomaticEnv()
