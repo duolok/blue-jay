@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"log"
 	"os"
+	"strings"
 	"github.com/duolok/blue-jay/config" 
 	"github.com/gocolly/colly"
 )
@@ -14,7 +15,7 @@ type Game struct {
 	Price       string
 }
 
-func scrapeGameList(cfg *config.Config) []Game {
+func scrapeGameList(cfg *config.Config, searchedGame string) []Game {
 	var games []Game
 
 	collector := colly.NewCollector(
@@ -36,7 +37,7 @@ func scrapeGameList(cfg *config.Config) []Game {
 		log.Printf("Request URL: %s failed with response: %v\n", r.Request.URL, err)
 	})
 
-	err := collector.Visit("https://www.allkeyshop.com/blog/catalogue/search-Elden+Ring/")
+	err := collector.Visit(cfg.GameListURL + transformGameSearchString(searchedGame))
 	if err != nil {
 		log.Fatalf("Failed to visit URL %s: %v", cfg.GameListURL, err)
 	}
@@ -72,13 +73,18 @@ func writeToCSV(games []Game, fileName string) error {
 	return writer.Error()
 }
 
+func transformGameSearchString(input string) string {
+	converted := strings.ReplaceAll(input, " ", "+")
+	return converted + "/"
+}
+
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	games := scrapeGameList(cfg)
+	games := scrapeGameList(cfg, "Hollow Knight")
 
 	err = writeToCSV(games, cfg.CSVFileName)
 	if err != nil {
