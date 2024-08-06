@@ -81,10 +81,11 @@ func (s *InstantGamingScraper) WriteToFile(path string) error {
 	writer.Flush()
 	return writer.Error()
 }
-func (s *InstantGamingScraper) getPrices() []string {
-	var prices[]string
-	for game := range(len(s.Games)) {
-		prices = append(prices, s.Games[game].Price)
+
+func (s *InstantGamingScraper) GetPrices() []string { // Capitalize method name
+	var prices []string
+	for _, game := range s.Games {
+		prices = append(prices, game.Price)
 	}
 	return prices
 }
