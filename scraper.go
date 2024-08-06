@@ -86,7 +86,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	games := scrapeGameList(cfg, "Elden Ring")
+	games := scrapeGameList(cfg, "Hollow Knight")
 
 	err = writeToCSV(games, cfg.CSVFileName)
 	if err != nil {
