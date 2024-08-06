@@ -21,7 +21,7 @@ type InstantGamingScraper struct {
 	Games  []Game
 }
 
-func NewInstantGamingScraper(cfg *Config) *InstantGamingScraper {
+func New(cfg *Config) *InstantGamingScraper {
 	return &InstantGamingScraper{
 		Config: cfg,
 	}
