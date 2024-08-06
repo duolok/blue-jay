@@ -1,6 +1,7 @@
 package interfaces
 
 type Scraper interface { 
-    scrape()
+    scrape(gameName string)
+    writeToFile(path string)
     getPrices()
 }
