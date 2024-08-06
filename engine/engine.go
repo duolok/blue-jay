@@ -18,7 +18,7 @@ var scraperConstructors = map[string]ScraperConstructor{
 	},
 }
 
-func loadScrapers() []string {
+func LoadScrapers() []string {
 	var scrapers []string
 
 	items, _ := os.ReadDir("./scrapers/")
@@ -31,7 +31,7 @@ func loadScrapers() []string {
 	return scrapers
 }
 
-func loadLastSearch(path string) ([]string, error) {
+func LoadLastSearch(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -52,7 +52,7 @@ func loadLastSearch(path string) ([]string, error) {
 	return lines, nil
 }
 
-func search(scrapers []string, game string, wg *sync.WaitGroup) {
+func Search(scrapers []string, game string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for _, scraperName := range scrapers {
