@@ -133,14 +133,6 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			m.Chosen = true
 			return m, frame()
 		}
-
-	case tickMsg:
-		if m.Ticks == 0 {
-			m.Quitting = true
-			return m, tea.Quit
-		}
-		m.Ticks--
-		return m, tick()
 	}
 
 	return m, nil
@@ -194,7 +186,7 @@ func choicesView(m model) string {
 
 `
 	tpl += "\n\n%s"
-	tpl += "Program quits in %s seconds\n\n"
+	tpl += "\n\n"
 	tpl += subtleStyle.Render("j/k, up/down: select") + dotStyle +
 		subtleStyle.Render("enter: choose") + dotStyle +
 		subtleStyle.Render("q, esc: quit")
@@ -207,7 +199,7 @@ func choicesView(m model) string {
 		checkbox("Quit", c == 3),
 	)
 
-	return fmt.Sprintf(tpl, choices, ticksStyle.Render(strconv.Itoa(m.Ticks)))
+	return fmt.Sprintf(tpl, choices)
 }
 
 // The second view, after a task has been chosen
