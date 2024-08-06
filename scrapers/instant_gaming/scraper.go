@@ -81,8 +81,12 @@ func (s *InstantGamingScraper) WriteToFile(path string) error {
 	writer.Flush()
 	return writer.Error()
 }
-func (s *InstantGamingScraper) GetPrices() {
-	// Implement price fetching logic if needed
+func (s *InstantGamingScraper) getPrices() []string {
+	var prices[]string
+	for game := range(len(s.Games)) {
+		prices = append(prices, s.Games[game].Price)
+	}
+	return prices
 }
 
 func transformGameSearchString(input string) string {
