@@ -7,15 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/duolok/blue-jay/scrapers/instant-gaming/config"
-	"github.com/duolok/blue-jay/interfaces"
 	"github.com/gocolly/colly"
 )
-
-type InstantGamingScraper struct {
-	Config *config.Config
-	Games  []Game
-}
 
 type Game struct {
 	Title string
@@ -23,7 +16,12 @@ type Game struct {
 	Price string
 }
 
-func NewInstantGamingScraper(cfg *config.Config) *InstantGamingScraper {
+type InstantGamingScraper struct {
+	Config *Config
+	Games  []Game
+}
+
+func NewInstantGamingScraper(cfg *Config) *InstantGamingScraper {
 	return &InstantGamingScraper{
 		Config: cfg,
 	}
@@ -83,11 +81,11 @@ func (s *InstantGamingScraper) WriteToFile(path string) error {
 	writer.Flush()
 	return writer.Error()
 }
-
 func (s *InstantGamingScraper) GetPrices() {
+	// Implement price fetching logic if needed
 }
 
 func transformGameSearchString(input string) string {
-	return  strings.ReplaceAll(input, " ", "%20")
+	return strings.ReplaceAll(input, " ", "%20")
 }
 
