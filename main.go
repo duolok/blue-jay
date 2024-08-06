@@ -2,12 +2,22 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"log"
+	"os"
 	"bufio"
+	"sync"
 
+	"github.com/duolok/blue-jay/interfaces"
 	"github.com/duolok/blue-jay/scrapers/instant_gaming"
 )
+
+type ScraperConstructor func(cfg *instant_gaming.Config) interfaces.Scraper
+
+var scraperConstructors = map[string]ScraperConstructor{
+	"instant_gaming": func(cfg *instant_gaming.Config) interfaces.Scraper {
+		return instant_gaming.New(cfg)
+	},
+}
 
 func loadScrapers() []string {
 	var scrapers []string
@@ -22,7 +32,6 @@ func loadScrapers() []string {
 	return scrapers
 }
 
-
 func loadLastSearch(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -34,7 +43,7 @@ func loadLastSearch(path string) ([]string, error) {
 	lines := []string{}
 
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text()) 
+		lines = append(lines, scanner.Text())
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -44,34 +53,53 @@ func loadLastSearch(path string) ([]string, error) {
 	return lines, nil
 }
 
+func search(scrapers []string, game string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for _, scraperName := range scrapers {
+		if constructor, exists := scraperConstructors[scraperName]; exists {
+			cfg, err := instant_gaming.LoadConfig()
+			if err != nil {
+				log.Printf("Failed to load configuration for %s: %v", scraperName, err)
+				continue
+			}
+			scraper := constructor(cfg)
+
+			wg.Add(1)
+			go func(scraper interfaces.Scraper, scraperName string) {
+				defer wg.Done()
+				scraper.Scrape(game)
+				err := scraper.WriteToFile(cfg.CSVFileName)
+				if err != nil {
+					log.Printf("Failed to write results for %s: %v", scraperName, err)
+				}
+			}(scraper, scraperName)
+		} else {
+			log.Printf("No constructor found for scraper: %s", scraperName)
+		}
+	}
+}
+
 func main() {
-	scrapers := loadScrapers()
-	for _, item := range scrapers {
-		fmt.Println(item)
+	scraperNames := loadScrapers()
+	for _, name := range scraperNames {
+		fmt.Println(name)
 	}
 
-	lines, err := loadLastSearch("games.csv")
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return 
-	}
+	// Load last search games
+	//games, err := loadLastSearch("games.csv")
+	//if err != nil {
+	//	fmt.Println("Error: ", err)
+	//	return
+	//}
 
-	for _, line := range(lines) {
-		fmt.Println(line)
-	}
+	// Setup wait group for concurrency
+	var wg sync.WaitGroup
+	wg.Add(1)
 
+	go search(scraperNames, "hollow knight", &wg)
+	wg.Wait()
 
-	cfg, err := instant_gaming.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	scraper := instant_gaming.NewInstantGamingScraper(cfg)
-	scraper.Scrape("Hollow Knight")
-
-	err = scraper.WriteToFile(cfg.CSVFileName)
-	if err != nil {
-		log.Fatalf("Failed to write games to CSV: %v", err)
-	}
+	fmt.Println("Scraping completed for all games.")
 }
 
