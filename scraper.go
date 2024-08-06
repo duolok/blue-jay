@@ -5,14 +5,15 @@ import (
 	"log"
 	"os"
 	"strings"
-	"github.com/duolok/blue-jay/config" 
+	"time"
+	"github.com/duolok/blue-jay/config"
 	"github.com/gocolly/colly"
 )
 
 type Game struct {
-	Title       string
-	Description string
-	Price       string
+	Title string
+	Link  string
+	Price string
 }
 
 func scrapeGameList(cfg *config.Config, searchedGame string) []Game {
@@ -20,17 +21,20 @@ func scrapeGameList(cfg *config.Config, searchedGame string) []Game {
 
 	collector := colly.NewCollector(
 		colly.UserAgent(cfg.UserAgent),
+		colly.Async(true),
 	)
 
-	collector.SetRequestTimeout(cfg.RequestTimeout)
-
-	collector.OnHTML(".search-results-row", func(e *colly.HTMLElement) {
+	collector.SetRequestTimeout(time.Duration(cfg.RequestTimeout) * time.Second)
+	collector.OnHTML(".search .item", func(h *colly.HTMLElement) {
 		game := Game{
-			Title:       e.ChildText(".search-results-row-game-title"),
-			Description: e.ChildText(".search-results-row-game-infos"),
-			Price:       e.ChildText(".search-results-row-price"),
+			Title: h.ChildText(".title"),
+			Link: h.ChildAttr("a", "href"),
+			Price: h.ChildText(".price"),
 		}
-		games = append(games, game)
+
+		if game.Title != "" {
+			games = append(games, game)
+		}
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
@@ -56,25 +60,23 @@ func writeToCSV(games []Game, fileName string) error {
 
 	writer := csv.NewWriter(file)
 
-	headers := []string{"Title", "Description", "Price"}
+	headers := []string{"Title", "Price"}
 	if err := writer.Write(headers); err != nil {
 		return err
 	}
 
 	for _, game := range games {
-		record := []string{game.Title, game.Description, game.Price}
+		record := []string{game.Title, game.Price, game.Link}
 		if err := writer.Write(record); err != nil {
 			return err
 		}
 	}
-
 	writer.Flush()
-
 	return writer.Error()
 }
 
 func transformGameSearchString(input string) string {
-	converted := strings.ReplaceAll(input, " ", "+")
+	converted := strings.ReplaceAll(input, " ", "%20")
 	return converted + "/"
 }
 
@@ -84,7 +86,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	games := scrapeGameList(cfg, "Hollow Knight")
+	games := scrapeGameList(cfg, "Elden Ring")
 
 	err = writeToCSV(games, cfg.CSVFileName)
 	if err != nil {
