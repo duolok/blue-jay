@@ -313,7 +313,7 @@ func gameChoiceView(m model) string {
 			if m.Cursor == i {
 				s.WriteString(selectedLineStyle.Render("[x] " + m.Games[i][0] + " ━━━━━━━━━━ " + m.Games[i][1]))
 			} else {
-				s.WriteString(subtleStyle.Render("[ ] " + m.Games[i][0] + " ━━━━━━━━━━ " + m.Games[i][1]))
+				s.WriteString(mainStyle.Render("[ ] " + m.Games[i][0] + " ━━━━━━━━━━ " + m.Games[i][1]))
 			}
 
 			s.WriteString("\n")
