@@ -76,7 +76,7 @@ func initModel() model {
 
 	p := paginator.New()
 	p.Type = paginator.Dots
-	p.PerPage = 5
+	p.PerPage = 10
 	p.ActiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "235", Dark: "252"}).Render("•")
 	p.InactiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "250", Dark: "238"}).Render("•")
 
@@ -284,7 +284,7 @@ func gameChoiceView(m model) string {
 	s.WriteString("Select a game from the results:\n\n")
 
 	start, end := m.Paginator.GetSliceBounds(len(m.Games))
-	for i := start; i < end; i++ {
+	for i := start + 1; i < end; i++ {
 		if m.Cursor == i {
 			s.WriteString(checkboxStyle.Render("(•) "))
 		} else {
