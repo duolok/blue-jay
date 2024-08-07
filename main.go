@@ -55,6 +55,7 @@ type model struct {
 	Searching bool
 	ViewState string
 	Paginator paginator.Model
+	LastSearch [][]string
 }
 
 type (
@@ -149,6 +150,8 @@ func (m model) View() string {
 		return mainStyle.Render("\n" + searchView(m) + "\n\n")
 	case "results":
 		return mainStyle.Render("\n" + gameChoiceView(m) + "\n\n")
+	case "lastSearch":
+		return mainStyle.Render("\n" + lastSearchView(m) + "\n\n")
 	}
 
 	return ""
@@ -169,11 +172,20 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.Choice = 0
 			}
 		case "enter":
-			if m.Choice == 0 {
+			switch m.Choice {
+			case 0:
 				m.ViewState = "search"
 				return m, nil
-			}
-			if m.Choice == 3 {
+			case 1: 
+				lastSearch, err := loadLastSearch()
+				if err != nil {
+					fmt.Println("Error loading last search:", err)
+				}
+				m.LastSearch = lastSearch
+				m.Paginator.SetTotalPages((len(m.LastSearch) + m.Paginator.PerPage - 1) / m.Paginator.PerPage)
+				m.ViewState = "lastSearch"
+				return m, nil
+			case 3:
 				m.Quitting = true
 				return m, tea.Quit
 			}
@@ -186,6 +198,7 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
+
 
 func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -214,35 +227,63 @@ func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 }
 
 func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
-    switch msg := msg.(type) {
-    case tea.KeyMsg:
-        switch msg.String() {
-        case "j", "down":
-            m.Cursor++
-            if m.Cursor >= len(m.Games) {
-                m.Cursor = 0
-            }
-        case "k", "up":
-            m.Cursor--
-            if m.Cursor < 0 {
-                m.Cursor = len(m.Games) - 1
-            }
-        case "enter":
-            if len(m.Games) > 0 {
-                openInBrowser(m.Games[m.Cursor][2])
-                return m, nil
-            }
-        case "esc":
-            m.ViewState = "search"
-            return m, nil
-        case "left", "h":
-            m.Paginator.PrevPage()
-        case "right", "l":
-            m.Paginator.NextPage()
-        }
-    }
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			m.Cursor++
+			if m.Cursor >= len(m.Games) {
+				m.Cursor = 0
+			}
+		case "k", "up":
+			m.Cursor--
+			if m.Cursor < 0 {
+				m.Cursor = len(m.Games) - 1
+			}
+		case "enter":
+			if len(m.Games) > 0 {
+				openInBrowser(m.Games[m.Cursor][2])
+				return m, nil
+			}
+		case "esc":
+			m.ViewState = "choices"
+			return m, nil
+		case "left", "h":
+			m.Paginator.PrevPage()
+		case "right", "l":
+			m.Paginator.NextPage()
+		}
+	}
 
-    return m, nil
+	return m, nil
+}
+
+
+func lastSearchView(m model) string {
+	var s strings.Builder
+
+	s.WriteString("Last search results:\n\n")
+
+	start, end := m.Paginator.GetSliceBounds(len(m.LastSearch))
+	for i := start; i < end; i++ {
+		if m.LastSearch[i][1] != "" {
+			if m.Cursor == i {
+				s.WriteString(selectedLineStyle.Render("[x] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
+			} else {
+				s.WriteString(mainStyle.Render("[ ] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
+			}
+
+			s.WriteString("\n")
+		}
+	}
+
+	s.WriteString("\n" + m.Paginator.View() + "\n")
+	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("h/l, left/right: page") + dotStyle +
+		subtleStyle.Render("enter: choose") + dotStyle +
+		subtleStyle.Render("esc: back"))
+
+	return s.String()
 }
 
 
@@ -405,5 +446,10 @@ func loadGames(filename string) ([][]string, error) {
 		games = append(games, []string{record[0], record[1], record[2]})
 	}
 	return games, nil
+}
+
+
+func loadLastSearch() ([][]string, error) {
+	return loadGames("games.csv")
 }
 
