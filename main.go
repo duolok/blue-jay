@@ -295,7 +295,6 @@ func gameChoiceView(m model) string {
 	}
 
 	s.WriteString("\n" + m.Paginator.View() + "\n")
-	s.WriteString("\n(press esc to go back, q to quit)\n")
 	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
 		subtleStyle.Render("h/l, left/right: page") + dotStyle +
 		subtleStyle.Render("enter: choose"))
