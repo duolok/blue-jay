@@ -47,7 +47,7 @@ type model struct {
 	Quitting  bool
 	TextInput textinput.Model
 	Err       error
-	Games     []string
+	Games     [][]string
 	Cursor    int
 	Searching bool
 	ViewState string
@@ -90,7 +90,7 @@ func initModel() model {
 		Quitting:  false,
 		TextInput: ti,
 		Err:       nil,
-		Games:     []string{},
+		Games:     [][]string{},
 		Cursor:    0,
 		Searching: false,
 		ViewState: "choices",
@@ -202,7 +202,6 @@ func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			m.ViewState = "results"
 			return m, nil
 		case "esc":
-			// Go back to choices
 			m.ViewState = "choices"
 			return m, nil
 		}
@@ -280,27 +279,35 @@ func searchView(m model) string {
 }
 
 func gameChoiceView(m model) string {
-	s := strings.Builder{}
-	s.WriteString("Select a game from the results:\n\n")
+    var s strings.Builder
 
-	start, end := m.Paginator.GetSliceBounds(len(m.Games))
-	for i := start + 1; i < end; i++ {
-		if m.Cursor == i {
-			s.WriteString(checkboxStyle.Render("[x] "))
-		} else {
-			s.WriteString(subtleStyle.Render("[ ] "))
+    s.WriteString("Select a game from the results:\n\n")
+
+    start, end := m.Paginator.GetSliceBounds(len(m.Games))
+	start = start + 1
+    for i := start; i < end; i++ {
+		if m.Games[i][1] != ""{
+			if m.Cursor == i {
+				s.WriteString(checkboxStyle.Render("[x] "))
+			} else {
+				s.WriteString(subtleStyle.Render("[ ] "))
+			}
+
+			if i < len(m.Games)  {
+				s.WriteString(m.Games[i][0]+ " ---- " +m.Games[i][1]) 
+			}
+			s.WriteString("\n")
 		}
-		s.WriteString(m.Games[i])
-		s.WriteString("\n")
-	}
+    }
 
-	s.WriteString("\n" + m.Paginator.View() + "\n")
-	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
-		subtleStyle.Render("h/l, left/right: page") + dotStyle +
-		subtleStyle.Render("enter: choose"))
+    s.WriteString("\n" + m.Paginator.View() + "\n")
+    s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
+        subtleStyle.Render("h/l, left/right: page") + dotStyle +
+        subtleStyle.Render("enter: choose"))
 
-	return s.String()
+    return s.String()
 }
+
 
 func checkbox(label string, checked bool) string {
 	if checked {
@@ -361,23 +368,23 @@ func searchGames(query string) {
 	wg.Wait()
 }
 
-func loadGames(filename string) ([]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+func loadGames(filename string) ([][]string, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
 
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
+    reader := csv.NewReader(file)
+    records, err := reader.ReadAll()
+    if err != nil {
+        return nil, err
+    }
 
-	var games []string
-	for _, record := range records {
-		games = append(games, record[0])
-	}
-	return games, nil
+    var games [][]string
+    for _, record := range records {
+        games = append(games, []string{record[0], record[1], record[2]})
+    }
+    return games, nil
 }
 
