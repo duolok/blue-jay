@@ -230,8 +230,6 @@ func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
         case "enter":
             if len(m.Games) > 0 {
                 openInBrowser(m.Games[m.Cursor][2])
-                // Set the view back to choices instead of quitting
-                m.ViewState = "choices"
                 return m, nil
             }
         case "esc":
