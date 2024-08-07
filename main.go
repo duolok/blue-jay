@@ -28,34 +28,34 @@ const (
 )
 
 var (
-	keywordStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
-	subtleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	ticksStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
-	checkboxStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
-	selectedLineStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("218")).Bold(true) 
-	progressEmpty    = subtleStyle.Render(progressEmptyChar)
-	dotStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
-	mainStyle        = lipgloss.NewStyle().MarginLeft(2)
+	keywordStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	subtleStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	ticksStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
+	checkboxStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	selectedLineStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("218")).Bold(true)
+	progressEmpty     = subtleStyle.Render(progressEmptyChar)
+	dotStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
+	mainStyle         = lipgloss.NewStyle().MarginLeft(2)
 
 	ramp = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
 )
 
 type model struct {
-	Choice    int
-	Chosen    bool
-	Ticks     int
-	Frames    int
-	Progress  float64
-	Loaded    bool
-	Quitting  bool
-	TextInput textinput.Model
-	Err       error
-	Games     [][]string
-	Cursor    int
-	Searching bool
-	ViewState string
-	Paginator paginator.Model
+	Choice     int
+	Chosen     bool
+	Ticks      int
+	Frames     int
+	Progress   float64
+	Loaded     bool
+	Quitting   bool
+	TextInput  textinput.Model
+	Err        error
+	Games      [][]string
 	LastSearch [][]string
+	Cursor     int
+	Searching  bool
+	ViewState  string
+	Paginator  paginator.Model
 }
 
 type (
@@ -85,20 +85,21 @@ func initModel() model {
 	p.InactiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "250", Dark: "238"}).Render("•")
 
 	return model{
-		Choice:    0,
-		Chosen:    false,
-		Ticks:     10,
-		Frames:    0,
-		Progress:  0,
-		Loaded:    false,
-		Quitting:  false,
-		TextInput: ti,
-		Err:       nil,
-		Games:     [][]string{},
-		Cursor:    0,
-		Searching: false,
-		ViewState: "choices",
-		Paginator: p,
+		Choice:     0,
+		Chosen:     false,
+		Ticks:      10,
+		Frames:     0,
+		Progress:   0,
+		Loaded:     false,
+		Quitting:   false,
+		TextInput:  ti,
+		Err:        nil,
+		Games:      [][]string{},
+		LastSearch: [][]string{},
+		Cursor:     0,
+		Searching:  false,
+		ViewState:  "choices",
+		Paginator:  p,
 	}
 }
 
@@ -134,6 +135,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return updateSearch(msg, m)
 	case "results":
 		return updateResults(msg, m)
+	case "lastSearch":
+		return updateLastSearch(msg, m)
 	}
 	return m, nil
 }
@@ -176,7 +179,7 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			case 0:
 				m.ViewState = "search"
 				return m, nil
-			case 1: 
+			case 1: // Last Search
 				lastSearch, err := loadLastSearch()
 				if err != nil {
 					fmt.Println("Error loading last search:", err)
@@ -198,7 +201,6 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-
 
 func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -246,7 +248,7 @@ func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "esc":
-			m.ViewState = "choices"
+			m.ViewState = "search"
 			return m, nil
 		case "left", "h":
 			m.Paginator.PrevPage()
@@ -258,34 +260,37 @@ func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-
-func lastSearchView(m model) string {
-	var s strings.Builder
-
-	s.WriteString("Last search results:\n\n")
-
-	start, end := m.Paginator.GetSliceBounds(len(m.LastSearch))
-	for i := start; i < end; i++ {
-		if m.LastSearch[i][1] != "" {
-			if m.Cursor == i {
-				s.WriteString(selectedLineStyle.Render("[x] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
-			} else {
-				s.WriteString(mainStyle.Render("[ ] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
+func updateLastSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			m.Cursor++
+			if m.Cursor >= len(m.LastSearch) {
+				m.Cursor = 0
 			}
-
-			s.WriteString("\n")
+		case "k", "up":
+			m.Cursor--
+			if m.Cursor < 0 {
+				m.Cursor = len(m.LastSearch) - 1
+			}
+		case "enter":
+			if len(m.LastSearch) > 0 {
+				openInBrowser(m.LastSearch[m.Cursor][2])
+				return m, nil
+			}
+		case "esc":
+			m.ViewState = "choices"
+			return m, nil
+		case "left", "h":
+			m.Paginator.PrevPage()
+		case "right", "l":
+			m.Paginator.NextPage()
 		}
 	}
 
-	s.WriteString("\n" + m.Paginator.View() + "\n")
-	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
-		subtleStyle.Render("h/l, left/right: page") + dotStyle +
-		subtleStyle.Render("enter: choose") + dotStyle +
-		subtleStyle.Render("esc: back"))
-
-	return s.String()
+	return m, nil
 }
-
 
 func openInBrowser(url string) {
 	var err error
@@ -348,7 +353,6 @@ func gameChoiceView(m model) string {
 	s.WriteString("Select a game from the results:\n\n")
 
 	start, end := m.Paginator.GetSliceBounds(len(m.Games))
-	start = start + 1
 	for i := start; i < end; i++ {
 		if m.Games[i][1] != "" {
 			if m.Cursor == i {
@@ -364,7 +368,35 @@ func gameChoiceView(m model) string {
 	s.WriteString("\n" + m.Paginator.View() + "\n")
 	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
 		subtleStyle.Render("h/l, left/right: page") + dotStyle +
-		subtleStyle.Render("enter: choose"))
+		subtleStyle.Render("enter: choose") + dotStyle +
+		subtleStyle.Render("esc: back"))
+
+	return s.String()
+}
+
+func lastSearchView(m model) string {
+	var s strings.Builder
+
+	s.WriteString("Last search results:\n\n")
+
+	start, end := m.Paginator.GetSliceBounds(len(m.LastSearch))
+	for i := start; i < end; i++ {
+		if m.LastSearch[i][1] != "" {
+			if m.Cursor == i {
+				s.WriteString(selectedLineStyle.Render("[x] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
+			} else {
+				s.WriteString(mainStyle.Render("[ ] " + m.LastSearch[i][0] + " ━━━━━━━━━━ " + m.LastSearch[i][1]))
+			}
+
+			s.WriteString("\n")
+		}
+	}
+
+	s.WriteString("\n" + m.Paginator.View() + "\n")
+	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("h/l, left/right: page") + dotStyle +
+		subtleStyle.Render("enter: choose") + dotStyle +
+		subtleStyle.Render("esc: back"))
 
 	return s.String()
 }
@@ -447,7 +479,6 @@ func loadGames(filename string) ([][]string, error) {
 	}
 	return games, nil
 }
-
 
 func loadLastSearch() ([][]string, error) {
 	return loadGames("games.csv")
