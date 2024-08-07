@@ -286,9 +286,9 @@ func gameChoiceView(m model) string {
 	start, end := m.Paginator.GetSliceBounds(len(m.Games))
 	for i := start + 1; i < end; i++ {
 		if m.Cursor == i {
-			s.WriteString(checkboxStyle.Render("(•) "))
+			s.WriteString(checkboxStyle.Render("[x] "))
 		} else {
-			s.WriteString(subtleStyle.Render("( ) "))
+			s.WriteString(subtleStyle.Render("[ ] "))
 		}
 		s.WriteString(m.Games[i])
 		s.WriteString("\n")
