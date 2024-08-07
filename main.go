@@ -342,7 +342,7 @@ func choicesView(m model) string {
 
 func searchView(m model) string {
 	return fmt.Sprintf(
-		"Enter game name to search and press Enter:\n\n%s\n\n(esc to return)",
+		"Enter game name to search and press Enter:\n\n%s\n\n",
 		m.TextInput.View(),
 	)
 }
