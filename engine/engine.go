@@ -53,8 +53,6 @@ func LoadLastSearch(path string) ([]string, error) {
 }
 
 func Search(scrapers []string, game string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
 	for _, scraperName := range scrapers {
 		if constructor, exists := scraperConstructors[scraperName]; exists {
 			cfg, err := instant_gaming.LoadConfig()
