@@ -1,22 +1,21 @@
 package main
 
-// An example demonstrating an application with multiple views.
-//
-// Note that this example was produced before the Bubbles progress component
-// was available (github.com/charmbracelet/bubbles/progress) and thus, we're
-// implementing a progress bar from scratch here.
-
 import (
+	"encoding/csv"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/charmbracelet/bubbles/paginator"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fogleman/ease"
 	"github.com/lucasb-eyer/go-colorful"
+	"github.com/duolok/blue-jay/engine"
 )
 
 const (
@@ -26,7 +25,6 @@ const (
 	dotChar           = " • "
 )
 
-// General stuff for styling the view
 var (
 	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
 	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
@@ -36,22 +34,69 @@ var (
 	dotStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
 	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
 
-	// Gradient colors we'll use for the progress bar
 	ramp = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
 )
 
-func main() {
-	initialModel := model{0, false, 10, 0, 0, false, false}
-	p := tea.NewProgram(initialModel, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Println("could not start program:", err)
-	}
+type model struct {
+	Choice    int
+	Chosen    bool
+	Ticks     int
+	Frames    int
+	Progress  float64
+	Loaded    bool
+	Quitting  bool
+	TextInput textinput.Model
+	Err       error
+	Games     []string
+	Cursor    int
+	Searching bool
+	ViewState string
+	Paginator paginator.Model
 }
 
 type (
 	tickMsg  struct{}
 	frameMsg struct{}
 )
+
+func main() {
+	initialModel := initModel()
+	p := tea.NewProgram(initialModel, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("could not start program:", err)
+	}
+}
+
+func initModel() model {
+	ti := textinput.New()
+	ti.Placeholder = "Search for games"
+	ti.Focus()
+	ti.CharLimit = 156
+	ti.Width = 20
+
+	p := paginator.New()
+	p.Type = paginator.Dots
+	p.PerPage = 5
+	p.ActiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "235", Dark: "252"}).Render("•")
+	p.InactiveDot = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "250", Dark: "238"}).Render("•")
+
+	return model{
+		Choice:    0,
+		Chosen:    false,
+		Ticks:     10,
+		Frames:    0,
+		Progress:  0,
+		Loaded:    false,
+		Quitting:  false,
+		TextInput: ti,
+		Err:       nil,
+		Games:     []string{},
+		Cursor:    0,
+		Searching: false,
+		ViewState: "choices",
+		Paginator: p,
+	}
+}
 
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg {
@@ -65,56 +110,47 @@ func frame() tea.Cmd {
 	})
 }
 
-type model struct {
-	Choice   int
-	Chosen   bool
-	Ticks    int
-	Frames   int
-	Progress float64
-	Loaded   bool
-	Quitting bool
-}
-
 func (m model) Init() tea.Cmd {
 	return tick()
 }
 
-// Main update function.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Make sure these keys always quit
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		k := msg.String()
-		if k == "q" || k == "esc" || k == "ctrl+c" {
+		if k == "q" || k == "ctrl+c" {
 			m.Quitting = true
 			return m, tea.Quit
 		}
 	}
 
-	// Hand off the message and model to the appropriate update function for the
-	// appropriate view based on the current state.
-	if !m.Chosen {
+	switch m.ViewState {
+	case "choices":
 		return updateChoices(msg, m)
+	case "search":
+		return updateSearch(msg, m)
+	case "results":
+		return updateResults(msg, m)
 	}
-	return updateChosen(msg, m)
+	return m, nil
 }
 
-// The main view, which just calls the appropriate sub-view
 func (m model) View() string {
-	var s string
 	if m.Quitting {
 		return "\n  See you later!\n\n"
 	}
-	if !m.Chosen {
-		s = choicesView(m)
-	} else {
-		s = chosenView(m)
+
+	switch m.ViewState {
+	case "choices":
+		return mainStyle.Render("\n" + choicesView(m) + "\n\n")
+	case "search":
+		return mainStyle.Render("\n" + searchView(m) + "\n\n")
+	case "results":
+		return mainStyle.Render("\n" + gameChoiceView(m) + "\n\n")
 	}
-	return mainStyle.Render("\n" + s + "\n\n")
+
+	return ""
 }
 
-// Sub-update functions
-
-// Update loop for the first view where you're choosing a task.
 func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -130,61 +166,96 @@ func updateChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.Choice = 0
 			}
 		case "enter":
-			m.Chosen = true
-			return m, frame()
-		}
-	}
-
-	return m, nil
-}
-
-// Update loop for the second view after a choice has been made
-func updateChosen(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
-	switch msg.(type) {
-	case frameMsg:
-		if !m.Loaded {
-			m.Frames++
-			m.Progress = ease.OutBounce(float64(m.Frames) / float64(100))
-			if m.Progress >= 1 {
-				m.Progress = 1
-				m.Loaded = true
-				m.Ticks = 3
-				return m, tick()
+			if m.Choice == 0 {
+				m.ViewState = "search"
+				return m, nil
 			}
-			return m, frame()
-		}
-
-	case tickMsg:
-		if m.Loaded {
-			if m.Ticks == 0 {
+			if m.Choice == 3 {
 				m.Quitting = true
 				return m, tea.Quit
 			}
-			m.Ticks--
-			return m, tick()
+			m.Chosen = true
+			return m, frame()
+		}
+	case tea.WindowSizeMsg:
+		m.TextInput.Width = msg.Width
+	}
+
+	return m, nil
+}
+
+func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			// Trigger game search
+			searchTerm := m.TextInput.Value()
+			searchGames(searchTerm)
+			games, err := loadGames("games.csv")
+			if err != nil {
+				fmt.Println("Some error has occurred")
+			}
+			m.Games = games
+			m.Paginator.SetTotalPages((len(m.Games) + m.Paginator.PerPage - 1) / m.Paginator.PerPage)
+			m.ViewState = "results"
+			return m, nil
+		case "esc":
+			// Go back to choices
+			m.ViewState = "choices"
+			return m, nil
+		}
+	}
+	m.TextInput, cmd = m.TextInput.Update(msg)
+	return m, cmd
+}
+
+func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			m.Cursor++
+			if m.Cursor >= len(m.Games) {
+				m.Cursor = 0
+			}
+		case "k", "up":
+			m.Cursor--
+			if m.Cursor < 0 {
+				m.Cursor = len(m.Games) - 1
+			}
+		case "enter":
+			if len(m.Games) > 0 {
+				fmt.Printf("\nYou chose: %s\n", m.Games[m.Cursor])
+				m.Quitting = true
+				return m, tea.Quit
+			}
+		case "esc":
+			m.ViewState = "search"
+			return m, nil
+		case "left", "h":
+			m.Paginator.PrevPage()
+		case "right", "l":
+			m.Paginator.NextPage()
 		}
 	}
 
 	return m, nil
 }
 
-// Sub-views
-
-// The first view, where you're choosing a task
 func choicesView(m model) string {
 	c := m.Choice
 
 	tpl := `
+		  ____  _                      _             
+		 | __ )| |_   _  ___          | | __ _ _   _ 
+		 |  _ \| | | | |/ _ \_____ _  | |/ _  | | | |
+		 | |_) | | |_| |  __/_____| |_| | (_| | |_| |
+		 |____/|_|\__,_|\___|      \___/ \__,_|\__, |
+											   |___/ 
+		`
 
-  ____  _                      _             
- | __ )| |_   _  ___          | | __ _ _   _ 
- |  _ \| | | | |/ _ \_____ _  | |/ _  | | | |
- | |_) | | |_| |  __/_____| |_| | (_| | |_| |
- |____/|_|\__,_|\___|      \___/ \__,_|\__, |
-                                       |___/ 
-
-
-`
 	tpl += "\n\n%s"
 	tpl += "\n\n"
 	tpl += subtleStyle.Render("j/k, up/down: select") + dotStyle +
@@ -193,36 +264,43 @@ func choicesView(m model) string {
 
 	choices := fmt.Sprintf(
 		"%s\n%s\n%s\n%s",
-		checkbox("Search for games", c == 0),
+		checkbox("Search For Games", c == 0),
 		checkbox("Last Search", c == 1),
 		checkbox("Settings", c == 2),
 		checkbox("Quit", c == 3),
 	)
-
 	return fmt.Sprintf(tpl, choices)
 }
 
-// The second view, after a task has been chosen
-func chosenView(m model) string {
-	var msg string
+func searchView(m model) string {
+	return fmt.Sprintf(
+		"Enter game name to search and press Enter:\n\n%s\n\n(esc to return)",
+		m.TextInput.View(),
+	)
+}
 
-	switch m.Choice {
-	case 0:
-		msg = fmt.Sprintf("Carrot planting?\n\nCool, we'll need %s and %s...", keywordStyle.Render("libgarden"), keywordStyle.Render("vegeutils"))
-	case 1:
-		msg = fmt.Sprintf("A trip to the market?\n\nOkay, then we should install %s and %s...", keywordStyle.Render("marketkit"), keywordStyle.Render("libshopping"))
-	case 2:
-		msg = fmt.Sprintf("Reading time?\n\nOkay, cool, then we’ll need a library. Yes, an %s.", keywordStyle.Render("actual library"))
-	default:
-		msg = fmt.Sprintf("It’s always good to see friends.\n\nFetching %s and %s...", keywordStyle.Render("social-skills"), keywordStyle.Render("conversationutils"))
+func gameChoiceView(m model) string {
+	s := strings.Builder{}
+	s.WriteString("Select a game from the results:\n\n")
+
+	start, end := m.Paginator.GetSliceBounds(len(m.Games))
+	for i := start; i < end; i++ {
+		if m.Cursor == i {
+			s.WriteString(checkboxStyle.Render("(•) "))
+		} else {
+			s.WriteString(subtleStyle.Render("( ) "))
+		}
+		s.WriteString(m.Games[i])
+		s.WriteString("\n")
 	}
 
-	label := "Downloading..."
-	if m.Loaded {
-		label = fmt.Sprintf("Downloaded. Exiting in %s seconds...", ticksStyle.Render(strconv.Itoa(m.Ticks)))
-	}
+	s.WriteString("\n" + m.Paginator.View() + "\n")
+	s.WriteString("\n(press esc to go back, q to quit)\n")
+	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("h/l, left/right: page") + dotStyle +
+		subtleStyle.Render("enter: choose"))
 
-	return msg + "\n\n" + label + "\n" + progressbar(m.Progress) + "%"
+	return s.String()
 }
 
 func checkbox(label string, checked bool) string {
@@ -247,9 +325,6 @@ func progressbar(percent float64) string {
 	return fmt.Sprintf("%s%s %3.0f", fullCells, emptyCells, math.Round(percent*100))
 }
 
-// Utils
-
-// Generate a blend of colors.
 func makeRampStyles(colorA, colorB string, steps float64) (s []lipgloss.Style) {
 	cA, _ := colorful.Hex(colorA)
 	cB, _ := colorful.Hex(colorB)
@@ -261,13 +336,10 @@ func makeRampStyles(colorA, colorB string, steps float64) (s []lipgloss.Style) {
 	return
 }
 
-// Convert a colorful.Color to a hexadecimal format.
 func colorToHex(c colorful.Color) string {
 	return fmt.Sprintf("#%s%s%s", colorFloatToHex(c.R), colorFloatToHex(c.G), colorFloatToHex(c.B))
 }
 
-// Helper function for converting colors to hex. Assumes a value between 0 and
-// 1.
 func colorFloatToHex(f float64) (s string) {
 	s = strconv.FormatInt(int64(f*255), 16)
 	if len(s) == 1 {
@@ -275,3 +347,38 @@ func colorFloatToHex(f float64) (s string) {
 	}
 	return
 }
+
+func searchGames(query string) {
+	scraperNames := engine.LoadScrapers()
+	var wg sync.WaitGroup
+
+	for _, scraperName := range scraperNames {
+		wg.Add(1)
+		go func(scraperName string) {
+			defer wg.Done()
+			engine.Search([]string{scraperName}, query, &wg)
+		}(scraperName)
+	}
+	wg.Wait()
+}
+
+func loadGames(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var games []string
+	for _, record := range records {
+		games = append(games, record[0])
+	}
+	return games, nil
+}
+
