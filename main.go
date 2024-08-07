@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,8 +16,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/lucasb-eyer/go-colorful"
 	"github.com/duolok/blue-jay/engine"
+	"github.com/lucasb-eyer/go-colorful"
 )
 
 const (
@@ -26,13 +28,14 @@ const (
 )
 
 var (
-	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
-	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	ticksStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
-	checkboxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
-	progressEmpty = subtleStyle.Render(progressEmptyChar)
-	dotStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
-	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
+	keywordStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	subtleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	ticksStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
+	checkboxStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	selectedLineStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("218")).Bold(true) 
+	progressEmpty    = subtleStyle.Render(progressEmptyChar)
+	dotStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
+	mainStyle        = lipgloss.NewStyle().MarginLeft(2)
 
 	ramp = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
 )
@@ -211,36 +214,58 @@ func updateSearch(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 }
 
 func updateResults(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "j", "down":
-			m.Cursor++
-			if m.Cursor >= len(m.Games) {
-				m.Cursor = 0
-			}
-		case "k", "up":
-			m.Cursor--
-			if m.Cursor < 0 {
-				m.Cursor = len(m.Games) - 1
-			}
-		case "enter":
-			if len(m.Games) > 0 {
-				fmt.Printf("\nYou chose: %s\n", m.Games[m.Cursor])
-				m.Quitting = true
-				return m, tea.Quit
-			}
-		case "esc":
-			m.ViewState = "search"
-			return m, nil
-		case "left", "h":
-			m.Paginator.PrevPage()
-		case "right", "l":
-			m.Paginator.NextPage()
-		}
+    switch msg := msg.(type) {
+    case tea.KeyMsg:
+        switch msg.String() {
+        case "j", "down":
+            m.Cursor++
+            if m.Cursor >= len(m.Games) {
+                m.Cursor = 0
+            }
+        case "k", "up":
+            m.Cursor--
+            if m.Cursor < 0 {
+                m.Cursor = len(m.Games) - 1
+            }
+        case "enter":
+            if len(m.Games) > 0 {
+                openInBrowser(m.Games[m.Cursor][2])
+                // Set the view back to choices instead of quitting
+                m.ViewState = "choices"
+                return m, nil
+            }
+        case "esc":
+            m.ViewState = "search"
+            return m, nil
+        case "left", "h":
+            m.Paginator.PrevPage()
+        case "right", "l":
+            m.Paginator.NextPage()
+        }
+    }
+
+    return m, nil
+}
+
+
+func openInBrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		fmt.Printf("unsupported platform")
+		return
 	}
 
-	return m, nil
+	if err != nil {
+		fmt.Printf("failed to open browser: %v\n", err)
+	}
 }
 
 func choicesView(m model) string {
@@ -279,35 +304,31 @@ func searchView(m model) string {
 }
 
 func gameChoiceView(m model) string {
-    var s strings.Builder
+	var s strings.Builder
 
-    s.WriteString("Select a game from the results:\n\n")
+	s.WriteString("Select a game from the results:\n\n")
 
-    start, end := m.Paginator.GetSliceBounds(len(m.Games))
+	start, end := m.Paginator.GetSliceBounds(len(m.Games))
 	start = start + 1
-    for i := start; i < end; i++ {
-		if m.Games[i][1] != ""{
+	for i := start; i < end; i++ {
+		if m.Games[i][1] != "" {
 			if m.Cursor == i {
-				s.WriteString(checkboxStyle.Render("[x] "))
+				s.WriteString(selectedLineStyle.Render("[x] " + m.Games[i][0] + " ━━━━━━━━━━ " + m.Games[i][1]))
 			} else {
-				s.WriteString(subtleStyle.Render("[ ] "))
+				s.WriteString(subtleStyle.Render("[ ] " + m.Games[i][0] + " ━━━━━━━━━━ " + m.Games[i][1]))
 			}
 
-			if i < len(m.Games)  {
-				s.WriteString(m.Games[i][0]+ " ---- " +m.Games[i][1]) 
-			}
 			s.WriteString("\n")
 		}
-    }
+	}
 
-    s.WriteString("\n" + m.Paginator.View() + "\n")
-    s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
-        subtleStyle.Render("h/l, left/right: page") + dotStyle +
-        subtleStyle.Render("enter: choose"))
+	s.WriteString("\n" + m.Paginator.View() + "\n")
+	s.WriteString(subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("h/l, left/right: page") + dotStyle +
+		subtleStyle.Render("enter: choose"))
 
-    return s.String()
+	return s.String()
 }
-
 
 func checkbox(label string, checked bool) string {
 	if checked {
@@ -369,22 +390,22 @@ func searchGames(query string) {
 }
 
 func loadGames(filename string) ([][]string, error) {
-    file, err := os.Open(filename)
-    if err != nil {
-        return nil, err
-    }
-    defer file.Close()
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
 
-    reader := csv.NewReader(file)
-    records, err := reader.ReadAll()
-    if err != nil {
-        return nil, err
-    }
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
 
-    var games [][]string
-    for _, record := range records {
-        games = append(games, []string{record[0], record[1], record[2]})
-    }
-    return games, nil
+	var games [][]string
+	for _, record := range records {
+		games = append(games, []string{record[0], record[1], record[2]})
+	}
+	return games, nil
 }
 
