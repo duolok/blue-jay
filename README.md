@@ -25,9 +25,7 @@
   - [Clone Repository](#clone-repository)
   - [Submitting Changes](#submitting-changes)
 - [Gallery](#gallery)
-- [Contributing](#contributing)
 - [License](#license)
-- [Acknowledgments](#acknowledgments)
 
 ## Features
 
@@ -108,7 +106,7 @@ To contribute to Blue-Jay, follow these steps:
    Clone your forked repository to your local machine:
 
    ```bash
-   git clone https://github.com/yourusername/blue-jay.git
+   git clone https://github.com/duolok/blue-jay.git
    cd blue-jay
    ```
 
@@ -150,11 +148,6 @@ Below are some screenshots showcasing Blue-Jay's TUI and features:
 
 ![Screenshot 3](resources/screenshot3.png)
 
-## Contributing
-
-Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTING.md) for more information on how to contribute to Blue-Jay.
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
-
