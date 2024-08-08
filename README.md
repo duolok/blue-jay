@@ -8,7 +8,8 @@
    <i>Minimalistic TUI for video game scraping written in Go.</i>
 </div>
 
-<br><br>
+
+## Demo
 
 ![Project Demo](resources/demo.gif)
 
