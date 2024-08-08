@@ -1,6 +1,6 @@
 # Blue-Jay
 
-![Project Image](resources/blue-jay.jpg)
+![Project Image](resources/blue_jay.jpg)
 Minimalistic TUI for video game scraping written in Go.
 
 ![Project Demo](resources/demo.gif)
