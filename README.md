@@ -4,8 +4,9 @@
     <img src="resources/blue_jay.jpg" alt="Project Image">
 </div>
 
-<i>Minimalistic TUI for video game scraping written in Go.</i>
-
+<div align="center">
+   <i>Minimalistic TUI for video game scraping written in Go.</i>
+</div>
 
 ![Project Demo](resources/demo.gif)
 
